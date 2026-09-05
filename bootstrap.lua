@@ -248,13 +248,16 @@ end
      behind a CDN, so just after a publish it can still serve stale bytes or a
      404. If it does not verify we fall back to the Contents API, which is always
      current, rather than calling a perfectly good file corrupt. ]]
-local bust = 0
+--[[ Set once the manifest is read. raw.githubusercontent caches a BRANCH path for
+     ~5 minutes and ignores query strings entirely — a cache-buster does nothing,
+     measured. A COMMIT path is immutable, so pinning to the commit the manifest
+     names is what actually guarantees the right bytes. ]]
+local pinned = nil
+
 local function download(name, expectSha)
-	--[[ The CDN holds a copy for a few minutes, which is exactly the window in
-	     which someone re-runs this after an update and gets the old file back.
-	     A unique query string is part of the cache key, so it always misses. ]]
-	bust += 1
-	local url = ("%s%s?t=%d-%d"):format(RAW, name, os.time(), bust)
+	local url = (pinned
+		and ("https://raw.githubusercontent.com/%s/%s/%s"):format(REPO, pinned, name)
+		or (RAW .. name))
 
 	local ok, body = pcall(function() return game:HttpGet(url, true) end)
 	if ok and not isNotFound(body) and (not expectSha or blobSha(body) == expectSha) then
@@ -290,14 +293,18 @@ log("checking " .. REPO .. "@" .. BRANCH)
      as the fallback inside download(). ]]
 local meta = {}
 do
-	local ok, body = pcall(function()
-		return game:HttpGet(RAW .. "manifest.json?t=" .. tostring(os.time()), true)
-	end)
+	local ok, body = pcall(function() return game:HttpGet(RAW .. "manifest.json", true) end)
 	if ok and not isNotFound(body) then
 		local decoded
 		ok, decoded = pcall(function() return Http:JSONDecode(body) end)
 		if ok and type(decoded) == "table" and type(decoded.files) == "table" then
 			meta = decoded.files
+			--[[ Everything else is then pulled from this exact commit. The manifest
+			     itself can be up to ~5 minutes behind the branch, so a install
+			     started in that window is simply a slightly older release — but a
+			     WHOLE one, never a mix of new and old files. ]]
+			pinned = decoded.commit
+			if pinned then log("pinned to commit " .. tostring(pinned):sub(1, 8)) end
 		end
 	end
 end
