@@ -35,3 +35,18 @@ per file and writes nothing.
 The bootstrap never touches your own files — `MastersAddons.json` (seeded once,
 then yours), `MastersData_<id>.json` (your library) and
 `MastersRecent_<id>.json` (play history) all stay put across updates.
+
+## Notes
+
+**Updates take up to ~5 minutes to reach you.** GitHub's raw CDN caches branch
+paths and ignores cache-busting query strings, so a freshly published change is
+not visible immediately. The installer works around the ugly part of this: the
+manifest pins the exact commit the payload landed in and every file is fetched
+from that commit, so you always get a *consistent* release — never a new
+`MastersLogic.lua` against an old `Masters.rbxm`. Worst case you install a
+release a few minutes old; run it again later to pick up the newest.
+
+**Every file is verified.** GitHub's `sha` is the git blob hash, and the
+installer recomputes it before writing anything to disk. This is not decoration:
+`game:HttpGet` returns the string `404: Not Found` instead of erroring, so
+without the check a missing file would be saved as its own contents.
