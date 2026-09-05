@@ -1,0 +1,36 @@
+{
+  "files": {
+    "Masters.rbxm": {
+      "sha": "ae5ff656c2ddf64d97eb1d3c8bec8ab5dafa5249",
+      "size": 214159
+    },
+    "MastersLoader.lua": {
+      "sha": "6c12448b061200eb5fd1ea651cada57f1af2f3a3",
+      "size": 7133
+    },
+    "MastersLogic.lua": {
+      "sha": "681acf161916cc44a541a6baefe99c358d215ba6",
+      "size": 446732
+    },
+    "MastersPresenceWS.txt": {
+      "sha": "8662fbeaea4197cc17c91ffc379fb33eab2d6862",
+      "size": 62
+    },
+    "MastersShareAPI.txt": {
+      "sha": "002cbf5cc1df345fdd5b0acdd40cfc9bc0cd37be",
+      "size": 34
+    },
+    "README.md": {
+      "sha": "35d5ce16a355df94a7a58f6cc9ce93b6c9f93493",
+      "size": 1316
+    },
+    "bootstrap.lua": {
+      "sha": "2adb27d2cee2ead97ce4b334fa8b53ccf302aff8",
+      "size": 19346
+    },
+    "run.lua": {
+      "sha": "54978911a3cc8b322b41c2d3c17cb44562a3536d",
+      "size": 2107
+    }
+  }
+}

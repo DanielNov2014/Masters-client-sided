@@ -117,6 +117,47 @@ local dismiss = E("TextButton", {Text = "✕", AutoButtonColor = false, Font = E
 	AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -18, 0, 16),
 	Size = UDim2.fromOffset(24, 24), Parent = card})
 
+--[[ How to start Masters after a rejoin. Without this on the card the only way
+     to find it out is to go and read the repo, which nobody does. ]]
+local RUN_CMD = 'loadstring(readfile("MastersRun.lua"))()'
+
+local hint = E("Frame", {BackgroundColor3 = Color3.fromRGB(20, 23, 32), BorderSizePixel = 0,
+	Visible = false, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20),
+	Size = UDim2.fromOffset(378, 48), Parent = card},
+	{corner(10), E("UIStroke", {Color = Color3.fromRGB(38, 41, 54), Thickness = 1})})
+
+E("TextLabel", {BackgroundTransparency = 1, Text = "NEXT TIME, RUN THIS",
+	Font = Enum.Font.GothamBold, TextSize = 9, TextColor3 = Color3.fromRGB(105, 110, 128),
+	TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(12, 7),
+	Size = UDim2.fromOffset(200, 11), Parent = hint})
+
+E("TextLabel", {BackgroundTransparency = 1, Text = RUN_CMD, Font = Enum.Font.Code,
+	TextSize = 12, TextColor3 = Color3.fromRGB(190, 196, 214),
+	TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+	Position = UDim2.fromOffset(12, 21), Size = UDim2.fromOffset(290, 18), Parent = hint})
+
+local copyBtn = E("TextButton", {Text = "Copy", AutoButtonColor = false,
+	Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = Color3.fromRGB(215, 220, 235),
+	BackgroundColor3 = Color3.fromRGB(38, 42, 56), BorderSizePixel = 0,
+	AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0),
+	Size = UDim2.fromOffset(58, 26), Parent = hint}, {corner(7)})
+
+copyBtn.MouseButton1Click:Connect(function()
+	local ok = pcall(function() setclipboard(RUN_CMD) end)
+	copyBtn.Text = ok and "Copied" or "Ctrl+C"
+	if not ok then log("copy unavailable in this executor — the command is: " .. RUN_CMD) end
+	task.delay(1.4, function() if copyBtn.Parent then copyBtn.Text = "Copy" end end)
+end)
+
+-- shown once the install is done: makes room for the hint under the button
+local function showRunHint()
+	hint.Visible = true
+	action.Position = UDim2.new(0.5, 0, 1, -78)
+	Tween:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad),
+		{Size = UDim2.fromOffset(430, 248)}):Play()
+	log("start Masters later with:  " .. RUN_CMD)
+end
+
 local function close()
 	Tween:Create(card, TweenInfo.new(0.22),
 		{Position = UDim2.new(0.5, 0, 0.5, 18), BackgroundTransparency = 1}):Play()
@@ -242,16 +283,37 @@ log("checking " .. REPO .. "@" .. BRANCH)
 
 -- One listing call gives every file's size and sha, so progress can be weighted
 -- by bytes and unchanged files skipped without asking about them individually.
-local listing, lerr = apiJson(
-	("https://api.github.com/repos/%s/contents/?ref=%s"):format(REPO, BRANCH))
-if not listing then
-	finish("Couldn't reach GitHub", tostring(lerr), "Close", Color3.fromRGB(226, 92, 92), close)
-	return
+--[[ The manifest is published next to the files and read straight off raw, so the
+     normal path never touches the GitHub API at all. That matters: anonymous API
+     calls are capped at 60 an hour and the cap is shared by everyone on your IP,
+     so a handful of reinstalls could lock you out with a 403. The API stays only
+     as the fallback inside download(). ]]
+local meta = {}
+do
+	local ok, body = pcall(function()
+		return game:HttpGet(RAW .. "manifest.json?t=" .. tostring(os.time()), true)
+	end)
+	if ok and not isNotFound(body) then
+		local decoded
+		ok, decoded = pcall(function() return Http:JSONDecode(body) end)
+		if ok and type(decoded) == "table" and type(decoded.files) == "table" then
+			meta = decoded.files
+		end
+	end
 end
 
-local meta = {}
-for _, e in ipairs(listing) do
-	if e.type == "file" then meta[e.name] = e end
+if next(meta) == nil then
+	status.Text = "Reading the file list…"
+	local listing = apiJson(("https://api.github.com/repos/%s/contents/?ref=%s"):format(REPO, BRANCH))
+	for _, e in ipairs(listing or {}) do
+		if e.type == "file" then meta[e.name] = {sha = e.sha, size = e.size} end
+	end
+end
+
+if next(meta) == nil then
+	finish("Couldn't reach GitHub", "no manifest, and the API is unavailable or rate limited",
+		"Close", Color3.fromRGB(226, 92, 92), close)
+	return
 end
 
 local state = {}
@@ -384,9 +446,11 @@ if alreadyRunning() then
 		"Close", Color3.fromRGB(99, 217, 138), close)
 else
 	finish(#todo > 0 and "Download complete" or "Ready",
-		("%d file(s) downloaded   ·   ready to run"):format(#todo),
+		#todo > 0 and ("%d file(s) downloaded   ·   ready to run"):format(#todo)
+		           or "everything already up to date",
 		"Run Masters", Color3.fromRGB(26, 116, 230), startMasters)
 end
+showRunHint()
 
 --[[ ---------------------------------------------------------------------------
      TOKEN: this repo is PUBLIC, so none is needed and none belongs here — a
