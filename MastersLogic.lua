@@ -12749,19 +12749,73 @@ task.spawn(function()
 
 		local shown = false
 
-		--[[ A short ping when the card slides in — it arrives unprompted while the
-		     player is doing something else, so it needs to be noticeable without
-		     talking over whatever is playing. Parented to SoundService so it is
-		     non-positional and survives the card being closed. ]]
-		local PING_ID = "rbxassetid://138118203571469"
+		--[[ The card arrives unprompted while the player is listening to something,
+		     so the ping ducks the music under itself and fades it back rather than
+		     competing with it.
+
+		     `ui.Playback` is a SoundGroup, which makes it the right thing to duck:
+		     one volume covers every Masters sound at once, including both halves of
+		     a crossfade, and nothing writes to it except the volume slider while it
+		     is actually being dragged. The ping itself is parented to SoundService,
+		     outside that group, so it does not duck itself. ]]
+		local PING_ID     = "rbxassetid://138118203571469"
+		local PING_VOLUME = 1
+		local DUCK_TO     = 0.15     -- fraction of the current volume to dip to
+		local FADE_OUT    = 0.25
+		local FADE_IN     = 1.1
+
+		local function musicGroup()
+			local g
+			pcall(function()
+				local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
+				local mui = pg and pg:FindFirstChild("Masters")
+				local found = mui and mui:FindFirstChild("Playback")
+				if found and found:IsA("SoundGroup") then g = found end
+			end)
+			return g
+		end
+
 		local function ping()
 			pcall(function()
+				local Debris = game:GetService("Debris")
+
 				local s = Instance.new("Sound")
 				s.SoundId = PING_ID
-				s.Volume = 0.45
+				s.Volume = PING_VOLUME
 				s.Parent = game:GetService("SoundService")
-				s:Play()
-				game:GetService("Debris"):AddItem(s, 8)
+				Debris:AddItem(s, 15)
+
+				local group = musicGroup()
+				if not group or group.Volume <= 0.001 then
+					s:Play()          -- nothing playing to duck
+					return
+				end
+
+				local restoreTo = group.Volume
+				local ducked = restoreTo * DUCK_TO
+				local restored = false
+
+				local function fadeBackIn()
+					if restored then return end
+					restored = true
+					--[[ If the volume moved while we had it ducked the player was on
+					     the slider; their value wins and we leave it alone. ]]
+					if math.abs(group.Volume - ducked) > 0.02 then return end
+					TweenService:Create(group, TweenInfo.new(FADE_IN, Enum.EasingStyle.Quad),
+						{Volume = restoreTo}):Play()
+				end
+
+				TweenService:Create(group, TweenInfo.new(FADE_OUT, Enum.EasingStyle.Quad),
+					{Volume = ducked}):Play()
+
+				task.delay(FADE_OUT, function()
+					if s.Parent then s:Play() end
+				end)
+
+				-- fade back when the ping finishes, with a timeout in case Ended
+				-- never fires (asset failed to load, sound destroyed early)
+				s.Ended:Connect(fadeBackIn)
+				task.delay(FADE_OUT + math.max(s.TimeLength, 2) + 0.2, fadeBackIn)
 			end)
 		end
 
