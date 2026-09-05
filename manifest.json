@@ -31,7 +31,7 @@
       "sha": "90c1952b9545a0440eb194f2a800c7399697d1a8"
     }
   ],
-  "commit": "76002e278d451fe6fa137f9955ece222230f80e9",
+  "commit": "0df2b85b3d34e395f012b9ac2f77657a28d2a46a",
   "files": {
     "Masters.rbxm": {
       "sha": "ae5ff656c2ddf64d97eb1d3c8bec8ab5dafa5249",
@@ -42,8 +42,8 @@
       "size": 7133
     },
     "MastersLogic.lua": {
-      "sha": "3d4f0e44be3f71aefa0c81f641f80c31c24a1648",
-      "size": 460831
+      "sha": "2baa965095aee6a939aae8014d3d4af879120834",
+      "size": 461107
     },
     "MastersPresenceWS.txt": {
       "sha": "8662fbeaea4197cc17c91ffc379fb33eab2d6862",
@@ -66,5 +66,5 @@
       "size": 2107
     }
   },
-  "notes": "Duck the music under the update ping and fade it back in"
+  "notes": "Derive update-card visibility from the card, not a flag that can go stale"
 }
