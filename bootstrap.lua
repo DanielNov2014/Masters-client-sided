@@ -189,6 +189,27 @@ end
 
 -- -------------------------------------------------------------------- start
 
+--[[ Running the loader twice in one session stacks a whole second UI, a second
+     copy of the package in ReplicatedStorage and a second set of connections —
+     everything then fires twice. Re-running this script to update is the normal
+     way to hit that, so check before launching: new files are already on disk
+     and a rejoin picks them up. ]]
+local function alreadyRunning()
+	if rawget(_G, "Queue") ~= nil then return true end
+	if game:GetService("ReplicatedStorage"):FindFirstChild("Masters(Storage)") then return true end
+	local pg = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+	return pg ~= nil and pg:FindFirstChild("Masters") ~= nil
+end
+
+if alreadyRunning() then
+	if fetched > 0 then
+		log("Masters is already running — rejoin the game to load the update")
+	else
+		log("Masters is already running and up to date")
+	end
+	return
+end
+
 local run, err = loadstring(readfile(ENTRY), "=MastersLoader")
 if not run then return fail("loader failed to compile: " .. tostring(err)) end
 
