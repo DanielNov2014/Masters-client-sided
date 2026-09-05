@@ -12679,6 +12679,9 @@ task.spawn(function()
 		local Http    = game:GetService("HttpService")
 		local Players = game:GetService("Players")
 		local TS      = game:GetService("TeleportService")
+		-- fetched rather than borrowed from the Handler's top-level locals, so this
+		-- block can be loaded and tested on its own
+		local TweenService = game:GetService("TweenService")
 
 		local REPO        = "DanielNov2014/Masters-client-sided"
 		local VERSION_API = "https://bestmusicplayer.vercel.app/api/version"
@@ -12702,12 +12705,29 @@ task.spawn(function()
 			return commit
 		end
 
-		local function latestRelease()
-			local ok, res = pcall(request, {Url = VERSION_API, Method = "GET",
+		local MANIFEST = "https://raw.githubusercontent.com/" .. REPO .. "/main/manifest.json"
+
+		local function fetchJson(url)
+			local ok, res = pcall(request, {Url = url, Method = "GET",
 				Headers = {["User-Agent"] = "Masters"}})
 			if not ok or type(res) ~= "table" or res.StatusCode ~= 200 then return nil end
 			local okj, data = pcall(function() return Http:JSONDecode(res.Body) end)
-			if okj and type(data) == "table" and data.ok and data.commit then return data end
+			return okj and type(data) == "table" and data or nil
+		end
+
+		--[[ The API answers instantly and is never cached, which is the whole point
+		     of it. If it is not deployed (or is down) fall back to the manifest on
+		     the branch: raw caches that for ~5 minutes, so an update is noticed a
+		     little later, but it is noticed. ]]
+		local function latestRelease()
+			local data = fetchJson(VERSION_API)
+			if data and data.ok and data.commit then return data end
+
+			data = fetchJson(MANIFEST)
+			if data and data.commit then
+				return {commit = data.commit, notes = data.notes or "",
+				        changelog = data.changelog or {}, viaManifest = true}
+			end
 			return nil
 		end
 
