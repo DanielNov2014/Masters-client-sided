@@ -12665,3 +12665,264 @@ task.spawn(function()
 	end)
 	if not ok then warn("[MASTERS] Admin tab failed: " .. tostring(err)) end
 end)
+
+
+-- [[ ============================================================================
+--   MASTERS UPDATER
+--     Notices when a newer release is published and offers to install it.
+--     Applying one means a rejoin, because the Handler is already loaded and
+--     re-running the loader in place would stack a second copy of everything.
+-- ============================================================================ ]]
+
+task.spawn(function()
+	local ok, err = pcall(function()
+		local Http    = game:GetService("HttpService")
+		local Players = game:GetService("Players")
+		local TS      = game:GetService("TeleportService")
+
+		local REPO        = "DanielNov2014/Masters-client-sided"
+		local VERSION_API = "https://bestmusicplayer.vercel.app/api/version"
+		local BOOTSTRAP   = "https://raw.githubusercontent.com/" .. REPO .. "/main/bootstrap.lua"
+		local STATE       = "MastersSync.json"
+		local CHECK_EVERY = 300      -- seconds
+
+		if not (isfile and readfile and request) then return end
+
+		--[[ Which release this install came from. The bootstrap records it; an
+		     older install predates that field, in which case there is nothing to
+		     compare against and we stay quiet rather than nag. ]]
+		local function installedCommit()
+			local commit
+			pcall(function()
+				if isfile(STATE) then
+					local s = Http:JSONDecode(readfile(STATE))
+					if type(s) == "table" then commit = s.commit end
+				end
+			end)
+			return commit
+		end
+
+		local function latestRelease()
+			local ok, res = pcall(request, {Url = VERSION_API, Method = "GET",
+				Headers = {["User-Agent"] = "Masters"}})
+			if not ok or type(res) ~= "table" or res.StatusCode ~= 200 then return nil end
+			local okj, data = pcall(function() return Http:JSONDecode(res.Body) end)
+			if okj and type(data) == "table" and data.ok and data.commit then return data end
+			return nil
+		end
+
+		-- ------------------------------------------------------------------ UI
+
+		local function E(class, props, kids)
+			local o = Instance.new(class)
+			local parent = props.Parent
+			for k, v in pairs(props) do if k ~= "Parent" then o[k] = v end end
+			if kids then for _, c in ipairs(kids) do c.Parent = o end end
+			o.Parent = parent
+			return o
+		end
+		local function corner(r) return E("UICorner", {CornerRadius = UDim.new(0, r)}) end
+
+		local INK  = Color3.fromRGB(245, 246, 250)
+		local MUT  = Color3.fromRGB(139, 144, 160)
+		local BLUE = Color3.fromRGB(26, 116, 230)
+
+		local shown = false
+
+		local function showUpdateWindow(rel, from)
+			if shown then return end
+			shown = true
+
+			local host = (gethui and gethui()) or game:GetService("CoreGui")
+			local old = host:FindFirstChild("MastersUpdate")
+			if old then old:Destroy() end
+
+			local screen = E("ScreenGui", {Name = "MastersUpdate", IgnoreGuiInset = true,
+				ResetOnSpawn = false, DisplayOrder = 50, Parent = host})
+
+			-- what landed since the release they are on
+			local lines = {}
+			for _, entry in ipairs(rel.changelog or {}) do
+				if entry.sha == from then break end
+				if entry.message and entry.message ~= "" then
+					lines[#lines + 1] = "•  " .. entry.message
+				end
+				if #lines >= 5 then break end
+			end
+			if #lines == 0 then
+				lines[1] = "•  " .. ((rel.notes ~= "" and rel.notes) or "A new release is available.")
+			end
+
+			local H = 176 + #lines * 16
+			local card = E("Frame", {BackgroundColor3 = Color3.fromRGB(14, 16, 24),
+				BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 1),
+				Position = UDim2.new(1, -24, 1, 24), Size = UDim2.fromOffset(390, H),
+				Parent = screen}, {corner(16),
+				E("UIStroke", {Color = Color3.fromRGB(38, 41, 54), Thickness = 1})})
+			TweenService:Create(card, TweenInfo.new(0.35, Enum.EasingStyle.Quint),
+				{Position = UDim2.new(1, -24, 1, -24)}):Play()
+
+			E("Frame", {BackgroundColor3 = Color3.fromRGB(99, 217, 138), BorderSizePixel = 0,
+				Position = UDim2.fromOffset(22, 24), Size = UDim2.fromOffset(9, 9), Parent = card},
+				{E("UICorner", {CornerRadius = UDim.new(1, 0)})})
+			E("TextLabel", {BackgroundTransparency = 1, Text = "Update available",
+				Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = INK,
+				TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(40, 17),
+				Size = UDim2.fromOffset(260, 22), Parent = card})
+			local sub = E("TextLabel", {BackgroundTransparency = 1,
+				Text = ("Masters %s is ready to install"):format(tostring(rel.commit):sub(1, 8)),
+				Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = MUT,
+				TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+				Position = UDim2.fromOffset(22, 42), Size = UDim2.new(1, -70, 0, 16), Parent = card})
+
+			local function closeCard()
+				TweenService:Create(card, TweenInfo.new(0.25),
+					{Position = UDim2.new(1, -24, 1, 24)}):Play()
+				task.delay(0.3, function() screen:Destroy() end)
+				shown = false
+			end
+
+			local x = E("TextButton", {Text = "✕", AutoButtonColor = false,
+				Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.fromRGB(120, 126, 145),
+				BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -16, 0, 14), Size = UDim2.fromOffset(24, 24), Parent = card})
+			x.MouseButton1Click:Connect(closeCard)
+
+			-- changelog
+			local notes = E("Frame", {BackgroundColor3 = Color3.fromRGB(20, 23, 32),
+				BorderSizePixel = 0, Position = UDim2.fromOffset(22, 68),
+				Size = UDim2.fromOffset(346, 14 + #lines * 16), Parent = card},
+				{corner(9), E("UIStroke", {Color = Color3.fromRGB(38, 41, 54), Thickness = 1})})
+			for i, line in ipairs(lines) do
+				E("TextLabel", {BackgroundTransparency = 1, Text = line, Font = Enum.Font.Gotham,
+					TextSize = 11, TextColor3 = Color3.fromRGB(190, 196, 214),
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					Position = UDim2.fromOffset(10, -9 + i * 16),
+					Size = UDim2.fromOffset(326, 15), Parent = notes})
+			end
+
+			--[[ The warning is not a formality: applying an update teleports the
+			     player out of whatever server they are in, so it must be said
+			     before anything happens, not after. ]]
+			local warn1 = E("TextLabel", {BackgroundTransparency = 1, Visible = false,
+				Text = "⚠  You will be rejoined into a new server to apply this.",
+				Font = Enum.Font.GothamMedium, TextSize = 12,
+				TextColor3 = Color3.fromRGB(240, 190, 90),
+				TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true,
+				Position = UDim2.fromOffset(22, H - 92), Size = UDim2.fromOffset(346, 32),
+				Parent = card})
+
+			local primary = E("TextButton", {Text = "", AutoButtonColor = false,
+				BackgroundColor3 = BLUE, BorderSizePixel = 0,
+				AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 22, 1, -22),
+				Size = UDim2.fromOffset(212, 38), Parent = card}, {corner(9)})
+			local primaryLabel = E("TextLabel", {BackgroundTransparency = 1, Text = "Update",
+				Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.fromRGB(255,255,255),
+				Size = UDim2.fromScale(1, 1), Parent = primary})
+
+			local secondary = E("TextButton", {Text = "Later", AutoButtonColor = false,
+				Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = MUT,
+				BackgroundColor3 = Color3.fromRGB(28, 31, 42), BorderSizePixel = 0,
+				AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -22, 1, -22),
+				Size = UDim2.fromOffset(112, 38), Parent = card}, {corner(9)})
+			secondary.MouseButton1Click:Connect(closeCard)
+
+			primary.MouseEnter:Connect(function()
+				TweenService:Create(primary, TweenInfo.new(0.15), {BackgroundTransparency = 0.15}):Play()
+			end)
+			primary.MouseLeave:Connect(function()
+				TweenService:Create(primary, TweenInfo.new(0.15), {BackgroundTransparency = 0}):Play()
+			end)
+
+			-- first press asks, second press does it
+			local armed = false
+			primary.MouseButton1Click:Connect(function()
+				if not armed then
+					armed = true
+					warn1.Visible = true
+					primaryLabel.Text = "Rejoin and update"
+					secondary.Text = "Cancel"
+					sub.Text = "Your queue will stop while the game reloads"
+					TweenService:Create(primary, TweenInfo.new(0.2),
+						{BackgroundColor3 = Color3.fromRGB(230, 138, 30)}):Play()
+					return
+				end
+
+				primaryLabel.Text = "Rejoining…"
+				primary.Active = false
+				secondary.Visible = false
+
+				--[[ Hand the installer to the next session before leaving this one.
+				     MastersAutoUpdate makes it skip the Run button, start Masters
+				     itself, and then show what changed. ]]
+				local queued = ([[
+_G.MastersAutoUpdate = { from = %q }
+local ok, err = pcall(function()
+    loadstring(game:HttpGet(%q))()
+end)
+if not ok then warn("[MASTERS] update failed after rejoin: " .. tostring(err)) end
+]]):format(tostring(from or ""), BOOTSTRAP)
+
+				local queuedOk = false
+				for _, fn in ipairs({queue_on_teleport, queueonteleport, queue_on_tp, queueontp}) do
+					if type(fn) == "function" then
+						queuedOk = pcall(fn, queued)
+						if queuedOk then break end
+					end
+				end
+
+				if not queuedOk then
+					-- without a teleport queue the update cannot be automatic; say so
+					-- rather than rejoining and silently doing nothing
+					warn1.Text = "⚠  This executor can't queue scripts across a teleport. "
+						.. "Rejoin and run the installer yourself."
+					primaryLabel.Text = "Copy installer"
+					primary.Active = true
+					armed = false
+					pcall(function()
+						setclipboard('loadstring(game:HttpGet("' .. BOOTSTRAP .. '"))()')
+					end)
+					return
+				end
+
+				task.wait(0.4)
+				local tok = pcall(function() TS:Teleport(game.PlaceId, Players.LocalPlayer) end)
+				if not tok then
+					warn1.Text = "⚠  Couldn't rejoin automatically — rejoin the game yourself "
+						.. "and the update will apply."
+					primaryLabel.Text = "Waiting for rejoin"
+				end
+			end)
+		end
+
+		-- ------------------------------------------------------------- polling
+
+		task.spawn(function()
+			task.wait(20)      -- let Masters finish starting before touching the network
+			while true do
+				local from = installedCommit()
+				local rel = latestRelease()
+				if rel and from and rel.commit ~= from then
+					showUpdateWindow(rel, from)
+				end
+				task.wait(CHECK_EVERY)
+			end
+		end)
+
+		--[[ Also exposed so it can be triggered by hand, and so the check can be
+		     forced right after an install without waiting for the next tick. ]]
+		rawset(_G, "MastersCheckForUpdate", function()
+			local from = installedCommit()
+			local rel = latestRelease()
+			if not rel then return false, "release API unavailable" end
+			if not from then return false, "this install predates update tracking" end
+			if rel.commit == from then return false, "already up to date" end
+			showUpdateWindow(rel, from)
+			return true, rel.commit
+		end)
+
+		print("[MASTERS] Updater armed")
+	end)
+	if not ok then warn("[MASTERS] Updater failed: " .. tostring(err)) end
+end)

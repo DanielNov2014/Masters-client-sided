@@ -37,6 +37,16 @@ local RUNNER = "MastersRun.lua"
 local ADDONS = "MastersAddons.json"
 
 local RAW = ("https://raw.githubusercontent.com/%s/%s/"):format(REPO, BRANCH)
+
+--[[ The release pointer. raw caches branch paths for ~5 minutes and ignores
+     query strings, so asking it "what is current?" can be minutes out of date.
+     This answers instantly with the commit sha; everything is then read from
+     raw/<commit>/, which is immutable and never stale. If it is unreachable we
+     fall back to the manifest on the branch, which still works. ]]
+local VERSION_API = "https://bestmusicplayer.vercel.app/api/version"
+
+-- set by the updater when it relaunches us after a rejoin
+local autoUpdate = rawget(_G, "MastersAutoUpdate")
 local Http    = game:GetService("HttpService")
 local Tween   = game:GetService("TweenService")
 local Players = game:GetService("Players")
@@ -291,19 +301,39 @@ log("checking " .. REPO .. "@" .. BRANCH)
      calls are capped at 60 an hour and the cap is shared by everyone on your IP,
      so a handful of reinstalls could lock you out with a 403. The API stays only
      as the fallback inside download(). ]]
+-- ask the API which commit is current; instant, and never cached
+local release = nil
+do
+	local ok, body = pcall(function() return game:HttpGet(VERSION_API, true) end)
+	if ok and not isNotFound(body) then
+		local okj, decoded = pcall(function() return Http:JSONDecode(body) end)
+		if okj and type(decoded) == "table" and decoded.ok and decoded.commit then
+			release = decoded
+			pinned = decoded.commit
+			log("release pointer: " .. tostring(decoded.commit):sub(1, 8))
+		end
+	end
+	if not release then log("release API unavailable — falling back to the branch manifest") end
+end
+
 local meta = {}
 do
-	local ok, body = pcall(function() return game:HttpGet(RAW .. "manifest.json", true) end)
+	--[[ With a pointer we read the manifest from that exact commit, so the file
+	     list and the files themselves always come from the same release. ]]
+	local url = pinned
+		and ("https://raw.githubusercontent.com/%s/%s/manifest.json"):format(REPO, pinned)
+		or (RAW .. "manifest.json")
+	local ok, body = pcall(function() return game:HttpGet(url, true) end)
 	if ok and not isNotFound(body) then
 		local decoded
 		ok, decoded = pcall(function() return Http:JSONDecode(body) end)
 		if ok and type(decoded) == "table" and type(decoded.files) == "table" then
 			meta = decoded.files
-			--[[ Everything else is then pulled from this exact commit. The manifest
-			     itself can be up to ~5 minutes behind the branch, so a install
-			     started in that window is simply a slightly older release — but a
-			     WHOLE one, never a mix of new and old files. ]]
-			pinned = decoded.commit
+			release = release or decoded
+			--[[ Without a pointer the manifest can be up to ~5 minutes behind the
+			     branch, so an install started in that window is simply a slightly
+			     older release — but a WHOLE one, never a mix of old and new. ]]
+			pinned = pinned or decoded.commit
 			if pinned then log("pinned to commit " .. tostring(pinned):sub(1, 8)) end
 		end
 	end
@@ -397,7 +427,8 @@ for _, name in ipairs(FILES) do
 end
 
 pcall(function()
-	writefile(STATE,  Http:JSONEncode({repo = REPO, branch = BRANCH, files = state}))
+	writefile(STATE,  Http:JSONEncode({repo = REPO, branch = BRANCH, files = state,
+		commit = pinned, installedAt = os.time()}))
 	writefile(CONFIG, Http:JSONEncode({repo = REPO, branch = BRANCH, token = TOKEN}))
 end)
 
@@ -458,17 +489,76 @@ local function startMasters()
 	close()
 end
 
-if alreadyRunning() then
+--[[ Relaunched by the in-game updater after a rejoin: start Masters without
+     making the user press anything, then show what changed. ]]
+local function runUpdateFlow()
+	status.Text = "Starting Masters…"
+	detail.Text = ""
+	task.wait(0.2)
+
+	local run, err = loadstring(readfile(ENTRY), "=MastersLoader")
+	local ok, rerr = false, err
+	if run then ok, rerr = pcall(run) end
+	if not ok then
+		finish("Update failed to start", tostring(rerr):sub(1, 90), "Close",
+			Color3.fromRGB(226, 92, 92), close)
+		return
+	end
+
+	-- everything published since the release they were on
+	local lines = {}
+	for _, entry in ipairs((release and release.changelog) or {}) do
+		if entry.sha == autoUpdate.from then break end
+		if entry.message and entry.message ~= "" then
+			lines[#lines + 1] = "•  " .. entry.message
+		end
+		if #lines >= 6 then break end
+	end
+	if #lines == 0 then
+		lines[1] = (release and release.notes ~= "" and ("•  " .. release.notes))
+			or "•  Masters is now up to date."
+	end
+
+	finish("Update complete", ("now on %s"):format(tostring(pinned):sub(1, 8)),
+		"Close", Color3.fromRGB(99, 217, 138), close)
+
+	-- reuse the hint panel as a changelog panel
+	hint.Visible = true
+	hint.Size = UDim2.fromOffset(378, 24 + #lines * 16)
+	for _, d in ipairs(hint:GetChildren()) do
+		if d:IsA("TextLabel") or d:IsA("TextButton") then d:Destroy() end
+	end
+	E("TextLabel", {BackgroundTransparency = 1, Text = "WHAT'S NEW",
+		Font = Enum.Font.GothamBold, TextSize = 9, TextColor3 = Color3.fromRGB(105, 110, 128),
+		TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(12, 6),
+		Size = UDim2.fromOffset(200, 11), Parent = hint})
+	for i, line in ipairs(lines) do
+		E("TextLabel", {BackgroundTransparency = 1, Text = line, Font = Enum.Font.Gotham,
+			TextSize = 11, TextColor3 = Color3.fromRGB(190, 196, 214),
+			TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+			Position = UDim2.fromOffset(12, 8 + i * 16), Size = UDim2.fromOffset(354, 15),
+			Parent = hint})
+	end
+	action.Position = UDim2.new(0.5, 0, 1, -(hint.Size.Y.Offset + 34))
+	Tween:Create(card, TweenInfo.new(0.25, Enum.EasingStyle.Quad),
+		{Size = UDim2.fromOffset(430, 200 + #lines * 16)}):Play()
+	log("updated to " .. tostring(pinned):sub(1, 8))
+end
+
+if autoUpdate then
+	runUpdateFlow()
+elseif alreadyRunning() then
 	finish(#todo > 0 and "Updated — rejoin to apply" or "Already running and up to date",
 		"Masters is already loaded in this session",
 		"Close", Color3.fromRGB(99, 217, 138), close)
+	showRunHint()
 else
 	finish(#todo > 0 and "Download complete" or "Ready",
 		#todo > 0 and ("%d file(s) downloaded   ·   ready to run"):format(#todo)
 		           or "everything already up to date",
 		"Run Masters", Color3.fromRGB(26, 116, 230), startMasters)
+	showRunHint()
 end
-showRunHint()
 
 --[[ ---------------------------------------------------------------------------
      TOKEN: this repo is PUBLIC, so none is needed and none belongs here — a
