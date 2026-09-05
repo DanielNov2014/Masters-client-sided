@@ -12747,7 +12747,17 @@ task.spawn(function()
 		local MUT  = Color3.fromRGB(139, 144, 160)
 		local BLUE = Color3.fromRGB(26, 116, 230)
 
-		local shown = false
+		local function uiHost()
+			return (gethui and gethui()) or game:GetService("CoreGui")
+		end
+
+		--[[ Whether the card is up is derived from the card existing, not from a
+		     flag. A flag goes stale the moment the ScreenGui is destroyed by anything
+		     other than the close button, and the updater then stays silent for the
+		     rest of the session. ]]
+		local function isShowing()
+			return uiHost():FindFirstChild("MastersUpdate") ~= nil
+		end
 
 		--[[ The card arrives unprompted while the player is listening to something,
 		     so the ping ducks the music under itself and fades it back rather than
@@ -12820,13 +12830,10 @@ task.spawn(function()
 		end
 
 		local function showUpdateWindow(rel, from)
-			if shown then return end
-			shown = true
+			if isShowing() then return end
 			ping()
 
-			local host = (gethui and gethui()) or game:GetService("CoreGui")
-			local old = host:FindFirstChild("MastersUpdate")
-			if old then old:Destroy() end
+			local host = uiHost()
 
 			local screen = E("ScreenGui", {Name = "MastersUpdate", IgnoreGuiInset = true,
 				ResetOnSpawn = false, DisplayOrder = 50, Parent = host})
@@ -12870,7 +12877,6 @@ task.spawn(function()
 				TweenService:Create(card, TweenInfo.new(0.25),
 					{Position = UDim2.new(1, -24, 1, 24)}):Play()
 				task.delay(0.3, function() screen:Destroy() end)
-				shown = false
 			end
 
 			local x = E("TextButton", {Text = "✕", AutoButtonColor = false,
