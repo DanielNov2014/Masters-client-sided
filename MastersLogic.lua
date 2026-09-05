@@ -12749,9 +12749,26 @@ task.spawn(function()
 
 		local shown = false
 
+		--[[ A short ping when the card slides in — it arrives unprompted while the
+		     player is doing something else, so it needs to be noticeable without
+		     talking over whatever is playing. Parented to SoundService so it is
+		     non-positional and survives the card being closed. ]]
+		local PING_ID = "rbxassetid://138118203571469"
+		local function ping()
+			pcall(function()
+				local s = Instance.new("Sound")
+				s.SoundId = PING_ID
+				s.Volume = 0.45
+				s.Parent = game:GetService("SoundService")
+				s:Play()
+				game:GetService("Debris"):AddItem(s, 8)
+			end)
+		end
+
 		local function showUpdateWindow(rel, from)
 			if shown then return end
 			shown = true
+			ping()
 
 			local host = (gethui and gethui()) or game:GetService("CoreGui")
 			local old = host:FindFirstChild("MastersUpdate")

@@ -50,3 +50,18 @@ release a few minutes old; run it again later to pick up the newest.
 installer recomputes it before writing anything to disk. This is not decoration:
 `game:HttpGet` returns the string `404: Not Found` instead of erroring, so
 without the check a missing file would be saved as its own contents.
+
+## Updating from inside Masters
+
+Masters checks for a new release every 5 minutes. When one lands it slides a
+card in at the bottom-right showing what changed, with **Update** and **Later**.
+
+Pressing Update does not update yet — it asks first, because applying one
+teleports you out of the server you are in. The button becomes **Rejoin and
+update** with the warning spelled out; pressing it again queues the installer to
+run after the teleport, rejoins you, installs, starts Masters, and shows what
+changed.
+
+It has to work that way: the Handler is already loaded, and re-running the loader
+in place would stack a second UI, a second copy of the package and a second set
+of connections, after which every control fires twice.
