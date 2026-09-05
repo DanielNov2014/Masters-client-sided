@@ -346,6 +346,7 @@ for _, name in ipairs(FILES) do
 end
 
 local doneBytes, failed = 0, 0
+local staleCdn = false
 
 if #todo == 0 then
 	setProgress(1, 1)
@@ -359,7 +360,14 @@ else
 
 		local data, how = download(name, meta[name].sha)
 		if not data then
+			--[[ `how` carries the reason when data is nil. The common one is not a
+			     real error: raw is still serving a copy from before the last push
+			     (branch paths cache for ~5 min) and the API is rate limited, so
+			     there is nowhere fresh left to ask. It fixes itself. ]]
 			warn(("[MASTERS] %s failed: %s"):format(name, tostring(how)))
+			if tostring(how):find("rate limit") or tostring(how):find("403") then
+				staleCdn = true
+			end
 			failed += 1
 		else
 			writefile(name, data)
@@ -373,7 +381,9 @@ else
 end
 
 if failed > 0 then
-	finish("Download failed", failed .. " file(s) could not be fetched — check the console",
+	finish("Download failed",
+		staleCdn and "GitHub is still serving an older copy — try again in a few minutes"
+		         or (failed .. " file(s) could not be fetched — see the console"),
 		"Close", Color3.fromRGB(226, 92, 92), close)
 	return
 end
@@ -397,11 +407,12 @@ end)
 for local_name, saved_as in pairs({["bootstrap.lua"] = SELF, ["run.lua"] = RUNNER}) do
 	local entry = meta[local_name]
 	if entry then
-		local ok, body = pcall(download, local_name, entry.sha)
+		local ok, body, err = pcall(download, local_name, entry.sha)
 		if ok and body then
 			pcall(function() writefile(saved_as, body) end)
 		else
-			warn(("[MASTERS] could not save %s locally (%s)"):format(saved_as, tostring(body)))
+			-- `err` holds the reason; `body` is nil on failure and says nothing
+			warn(("[MASTERS] could not save %s locally (%s)"):format(saved_as, tostring(err)))
 		end
 	end
 end
