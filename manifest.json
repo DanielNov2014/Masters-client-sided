@@ -1,6 +1,11 @@
 {
   "changelog": [
     {
+      "date": "2026-09-05T14:48:46Z",
+      "message": "Ping when the update card appears",
+      "sha": "8f0eba7ddf5391174559f4de058e09f0645258be"
+    },
+    {
       "date": "2026-09-05T14:47:17Z",
       "message": "Updater falls back to the branch manifest when the release API is not deployed",
       "sha": "34047b30766756aea7a3de6094c54d87867ab1fe"
@@ -29,19 +34,9 @@
       "date": "2026-09-05T14:26:17Z",
       "message": "Read the file list from a published manifest instead of the rate-limited API; show the run command with a copy button",
       "sha": "50143fefa8e3cfa1f231428ba406d802a863fd42"
-    },
-    {
-      "date": "2026-09-05T14:23:16Z",
-      "message": "Cache-bust raw fetches so an update is never served the stale copy",
-      "sha": "b73903418e8869d7e80ee9335b20e92bc4509037"
-    },
-    {
-      "date": "2026-09-05T14:21:37Z",
-      "message": "Verify every download: HttpGet returns a 404 body instead of erroring",
-      "sha": "c35b97bdb429ea7f9534f6c07632cfca206a5b30"
     }
   ],
-  "commit": "34047b30766756aea7a3de6094c54d87867ab1fe",
+  "commit": "8f0eba7ddf5391174559f4de058e09f0645258be",
   "files": {
     "Masters.rbxm": {
       "sha": "ae5ff656c2ddf64d97eb1d3c8bec8ab5dafa5249",
@@ -52,8 +47,8 @@
       "size": 7133
     },
     "MastersLogic.lua": {
-      "sha": "806b99d5d02f13af2ae0e022f366c492ae61d9db",
-      "size": 458383
+      "sha": "0a590906930f54dfea80e5eb90e55b23d44399f4",
+      "size": 458977
     },
     "MastersPresenceWS.txt": {
       "sha": "8662fbeaea4197cc17c91ffc379fb33eab2d6862",
@@ -64,8 +59,8 @@
       "size": 34
     },
     "README.md": {
-      "sha": "8669a88fc1be91bb333cd0af43d4340a96e4c92c",
-      "size": 2162
+      "sha": "556db4f70deb25ee4332b46a058305d3983aba8c",
+      "size": 2893
     },
     "bootstrap.lua": {
       "sha": "81e0e4cb4935c8c4cea10660c34107403d31157c",
@@ -76,5 +71,5 @@
       "size": 2107
     }
   },
-  "notes": "Updater falls back to the branch manifest when the release API is not deployed"
+  "notes": "Ping when the update card appears"
 }
