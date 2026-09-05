@@ -1,6 +1,11 @@
 {
   "changelog": [
     {
+      "date": "2026-09-05T14:52:21Z",
+      "message": "Duck the music under the update ping and fade it back in",
+      "sha": "76002e278d451fe6fa137f9955ece222230f80e9"
+    },
+    {
       "date": "2026-09-05T14:48:46Z",
       "message": "Ping when the update card appears",
       "sha": "8f0eba7ddf5391174559f4de058e09f0645258be"
@@ -24,19 +29,9 @@
       "date": "2026-09-05T14:30:58Z",
       "message": "Report CDN staleness plainly instead of a bare failure count",
       "sha": "90c1952b9545a0440eb194f2a800c7399697d1a8"
-    },
-    {
-      "date": "2026-09-05T14:29:22Z",
-      "message": "Pin downloads to a commit: raw ignores cache-busters and caches branches for ~5min",
-      "sha": "6dfc4676b34e0d3960942c7f8c16cc863b600cfc"
-    },
-    {
-      "date": "2026-09-05T14:26:17Z",
-      "message": "Read the file list from a published manifest instead of the rate-limited API; show the run command with a copy button",
-      "sha": "50143fefa8e3cfa1f231428ba406d802a863fd42"
     }
   ],
-  "commit": "8f0eba7ddf5391174559f4de058e09f0645258be",
+  "commit": "76002e278d451fe6fa137f9955ece222230f80e9",
   "files": {
     "Masters.rbxm": {
       "sha": "ae5ff656c2ddf64d97eb1d3c8bec8ab5dafa5249",
@@ -47,8 +42,8 @@
       "size": 7133
     },
     "MastersLogic.lua": {
-      "sha": "0a590906930f54dfea80e5eb90e55b23d44399f4",
-      "size": 458977
+      "sha": "3d4f0e44be3f71aefa0c81f641f80c31c24a1648",
+      "size": 460831
     },
     "MastersPresenceWS.txt": {
       "sha": "8662fbeaea4197cc17c91ffc379fb33eab2d6862",
@@ -71,5 +66,5 @@
       "size": 2107
     }
   },
-  "notes": "Ping when the update card appears"
+  "notes": "Duck the music under the update ping and fade it back in"
 }
