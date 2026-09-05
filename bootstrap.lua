@@ -3,7 +3,7 @@
 
      Run this on any PC:
 
-         loadstring(game:HttpGet("https://raw.githubusercontent.com/DanielNov2014/Masters-client-sided/main/bootstrap.lua"))()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/DanielNov2014/Masters-client-sided/main/bootstrap.lua?t="..tick()))()
 
      It downloads Masters into Real's Workspace folder, shows the progress, and
      gives you a Run button when it is done.
@@ -207,8 +207,15 @@ end
      behind a CDN, so just after a publish it can still serve stale bytes or a
      404. If it does not verify we fall back to the Contents API, which is always
      current, rather than calling a perfectly good file corrupt. ]]
+local bust = 0
 local function download(name, expectSha)
-	local ok, body = pcall(function() return game:HttpGet(RAW .. name, true) end)
+	--[[ The CDN holds a copy for a few minutes, which is exactly the window in
+	     which someone re-runs this after an update and gets the old file back.
+	     A unique query string is part of the cache key, so it always misses. ]]
+	bust += 1
+	local url = ("%s%s?t=%d-%d"):format(RAW, name, os.time(), bust)
+
+	local ok, body = pcall(function() return game:HttpGet(url, true) end)
 	if ok and not isNotFound(body) and (not expectSha or blobSha(body) == expectSha) then
 		return body, "raw"
 	end

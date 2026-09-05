@@ -8,7 +8,7 @@
 
      or, straight from GitHub:
 
-         loadstring(game:HttpGet("https://raw.githubusercontent.com/DanielNov2014/Masters-client-sided/main/run.lua"))()
+         loadstring(game:HttpGet("https://raw.githubusercontent.com/DanielNov2014/Masters-client-sided/main/run.lua?t="..tick()))()
 
      If Masters was never installed on this PC, run bootstrap.lua instead — it
      downloads everything and offers a Run button at the end.
@@ -41,7 +41,7 @@ end
 
 if #missing > 0 then
 	warn("[MASTERS] not installed on this PC — missing " .. table.concat(missing, ", "))
-	warn('[MASTERS] run the installer first:  loadstring(game:HttpGet("https://raw.githubusercontent.com/DanielNov2014/Masters-client-sided/main/bootstrap.lua"))()')
+	warn('[MASTERS] run the installer first:  loadstring(game:HttpGet("https://raw.githubusercontent.com/DanielNov2014/Masters-client-sided/main/bootstrap.lua?t="..tick()))()')
 	return
 end
 
