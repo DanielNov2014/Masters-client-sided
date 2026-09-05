@@ -194,14 +194,22 @@ local function blobSha(data)
 	return ok and d or nil
 end
 
+--[[ HttpGet does NOT throw on a missing file — it hands back the string
+     "404: Not Found" like it were content. Without a hash to check against that
+     lands on disk as the file, so every download is verified and this is the
+     backstop for the ones fetched before the listing is known. ]]
+local function isNotFound(body)
+	return type(body) ~= "string" or (#body < 64 and body:find("404", 1, true) == 1)
+end
+
 --[[ raw.githubusercontent is the fast path — no base64, a third less to transfer,
      and verified byte-identical to the API for the binary .rbxm. But it sits
-     behind a CDN, so just after a publish it can still serve the old bytes. If
-     the hash does not match we fall back to the Contents API, which is always
+     behind a CDN, so just after a publish it can still serve stale bytes or a
+     404. If it does not verify we fall back to the Contents API, which is always
      current, rather than calling a perfectly good file corrupt. ]]
 local function download(name, expectSha)
 	local ok, body = pcall(function() return game:HttpGet(RAW .. name, true) end)
-	if ok and body and (not expectSha or blobSha(body) == expectSha) then
+	if ok and not isNotFound(body) and (not expectSha or blobSha(body) == expectSha) then
 		return body, "raw"
 	end
 	local entry, err = apiJson(
@@ -307,13 +315,20 @@ pcall(function()
 	writefile(CONFIG, Http:JSONEncode({repo = REPO, branch = BRANCH, token = TOKEN}))
 end)
 
--- keep local copies so updating and running need no pasting
-pcall(function()
-	local body = download("bootstrap.lua")
-	if body then writefile(SELF, body) end
-	local runner = download("run.lua")
-	if runner then writefile(RUNNER, runner) end
-end)
+--[[ Keep local copies so updating and running need no pasting. Both are verified
+     against the sha from the listing like everything else — an unverified write
+     here is how "404: Not Found" ends up saved as your runner. ]]
+for local_name, saved_as in pairs({["bootstrap.lua"] = SELF, ["run.lua"] = RUNNER}) do
+	local entry = meta[local_name]
+	if entry then
+		local ok, body = pcall(download, local_name, entry.sha)
+		if ok and body then
+			pcall(function() writefile(saved_as, body) end)
+		else
+			warn(("[MASTERS] could not save %s locally (%s)"):format(saved_as, tostring(body)))
+		end
+	end
+end
 
 --[[ Add-ons ship disabled and are gated on this file, which the full setup UI
      would normally write. Seed it once so Local Stations is on; after that it is
